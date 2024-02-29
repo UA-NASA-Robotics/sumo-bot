@@ -1,6 +1,7 @@
 #include <ESP32Servo.h>
 #include <Bluepad32.h>
 
+
 // create two servo objects 
 Servo right;
 Servo left;
@@ -8,7 +9,11 @@ Servo left;
 // declare servo pins
 int rightPin = 32;
 int leftPin = 33;
-int zeroOffset = 2;
+float zeroOffset = 2.75;
+// for backup control by serial
+char serialIn = '0';
+// mode selection
+int modeSel = 1;
 
 // create gamepad pointer for xbox controller
 GamepadPtr myGamepads[BP32_MAX_GAMEPADS];
@@ -37,6 +42,7 @@ void onConnectedGamepad(GamepadPtr gp) {
         "CALLBACK: Gamepad connected, but could not found empty slot");
   }
 }
+// more gamepad stuff
 void onDisconnectedGamepad(GamepadPtr gp) {
   bool foundGamepad = false;
 
@@ -88,6 +94,22 @@ void setup() {
   //right.write(180);
   //left.write(180);
   //delay(500);
+
+  // wait 2 secs for serial override
+  Serial.printf("Waiting for possible serial override for 2 seconds... (y/N)\n");
+  for (int i = 0; i < 4; i++) {
+    serialIn = Serial.read();
+    if (serialIn == 'y'){
+      Serial.printf("Serial Override Activated. Ignoring Bluetooth controller!\n");
+      modeSel = 0;
+    }
+    if (serialIn == 'n'){
+      Serial.printf("Serial Ignored.\n");
+      modeSel = 1;
+    }
+    delay(500);
+  }
+  Serial.printf("Serial Ignored.\n");
 }
 
 // Main loop, CPU 1
@@ -97,66 +119,124 @@ void loop() {
   // Just call this function in your main loop.
   // The gamepads pointer (the ones received in the callbacks) gets updated
   // automatically.
-  BP32.update();
-  // It is safe to always do this before using the gamepad API.
-  // This guarantees that the gamepad is valid and connected.
-  for (int i = 0; i < BP32_MAX_GAMEPADS; i++) {
-    GamepadPtr myGamepad = myGamepads[i];
+  switch (modeSel) {
+    case 0:
+      {
+      Serial.printf("Running in Serial Control Mode\n");
+      serialIn = Serial.read();
+      if (serialIn == 'w') {
+          right.write(0);
+          left.write(180);
+          Serial.printf("w pressed, moving forward.\n");
+          delay(500);
+          right.write(90+zeroOffset);
+          left.write(90+zeroOffset);
+      }
+      //back
+      if (serialIn == 's') {
+        right.write(180);
+        left.write(0);
+        Serial.printf("s pressed, moving backward.\n");
+        delay(500);
+        right.write(90+zeroOffset);
+        left.write(90+zeroOffset);
+      }
+      //left
+      if (serialIn == 'a') {
+        right.write(0);
+        left.write(0);
+        Serial.printf("a pressed, turning left.\n");
+        delay(500);
+        right.write(90+zeroOffset);
+        left.write(90+zeroOffset);
+      }
+      //right
+      if (serialIn == 'd') {
+        right.write(180);
+        left.write(180);
+        Serial.printf("d pressed, turning right.\n");
+        delay(500);
+        right.write(90+zeroOffset);
+        left.write(90+zeroOffset);
+      }
+      if (serialIn == 'q') {
+        zeroOffset = zeroOffset + 0.25;
+        Serial.printf("offset up, %f\n", zeroOffset);
+      }
+      if (serialIn == 'e') {
+        zeroOffset = zeroOffset - 0.25;
+        Serial.printf("offset down, %f\n", zeroOffset);
+      }
+      break;}
+    case 1:
+      {
+      Serial.printf("Running in Bluetooth Control Mode\n");
+      BP32.update();
+      // It is safe to always do this before using the gamepad API.
+      // This guarantees that the gamepad is valid and connected.
+      for (int i = 0; i < BP32_MAX_GAMEPADS; i++) {
+        GamepadPtr myGamepad = myGamepads[i];
 
-    if (!(myGamepad && myGamepad->isConnected())) continue;
-    // There are different ways to query whether a button is pressed.
-    // By query each button individually:
-    //  a(), b(), x(), y(), l1(), etc...
-    //forward
-    if (myGamepad->y()) {
-      right.write(0);
-      left.write(180);
-      Serial.printf("Y pressed, moving forward.\n");
-      delay(500);
-      right.write(90+zeroOffset);
-      left.write(90+zeroOffset);
-    }
-    //back
-    if (myGamepad->a()) {
-      right.write(180);
-      left.write(0);
-      Serial.printf("A pressed, moving backward.\n");
-      delay(500);
-      right.write(90+zeroOffset);
-      left.write(90+zeroOffset);
-    }
-    //left
-    if (myGamepad->x()) {
-      right.write(0);
-      left.write(0);
-      Serial.printf("X pressed, turning left.\n");
-      delay(500);
-      right.write(90+zeroOffset);
-      left.write(90+zeroOffset);
-    }
-    //right
-    if (myGamepad->b()) {
-      right.write(180);
-      left.write(180);
-      Serial.printf("B pressed, turning right.\n");
-      delay(500);
-      right.write(90+zeroOffset);
-      left.write(90+zeroOffset);
-    }
-    if (myGamepad->dpad() == 1) {
-      zeroOffset = zeroOffset + 1;
-      Serial.printf("offset up, %d\n", zeroOffset);
-    }
-    if (myGamepad->dpad() == 2) {
-      zeroOffset = zeroOffset - 1;
-      Serial.printf("offset down, %d\n", zeroOffset);
-    }
+        if (!(myGamepad && myGamepad->isConnected())) continue;
+        // There are different ways to query whether a button is pressed.
+        // By query each button individually:
+        //  a(), b(), x(), y(), l1(), etc...
+        //forward
+        if (myGamepad->y()) {
+          right.write(0);
+          left.write(180);
+          Serial.printf("Y pressed, moving forward.\n");
+          delay(500);
+          right.write(90+zeroOffset);
+          left.write(90+zeroOffset);
+        }
+        //back
+        if (myGamepad->a()) {
+          right.write(180);
+          left.write(0);
+          Serial.printf("A pressed, moving backward.\n");
+          delay(500);
+          right.write(90+zeroOffset);
+          left.write(90+zeroOffset);
+        }
+        //left
+        if (myGamepad->x()) {
+          right.write(0);
+          left.write(0);
+          Serial.printf("X pressed, turning left.\n");
+          delay(500);
+          right.write(90+zeroOffset);
+          left.write(90+zeroOffset);
+        }
+        //right
+        if (myGamepad->b()) {
+          right.write(180);
+          left.write(180);
+          Serial.printf("B pressed, turning right.\n");
+          delay(500);
+          right.write(90+zeroOffset);
+          left.write(90+zeroOffset);
+        }
+        if (myGamepad->dpad() == 1) {
+          zeroOffset = zeroOffset + 0.25;
+          Serial.printf("offset up, %f\n", zeroOffset);
+        }
+        if (myGamepad->dpad() == 2) {
+          zeroOffset = zeroOffset - 0.25;
+          Serial.printf("offset down, %f\n", zeroOffset);
+        }
+      }
+      break;
+      }
   }
+  
+  
+  
   
 
 	//right.detach();
 	//left.detach();
 
-	delay(50);
+	delay(100);
 
 }
